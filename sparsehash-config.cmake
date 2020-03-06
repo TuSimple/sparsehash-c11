@@ -10,4 +10,4 @@ get_filename_component(sparsehash_INCLUDE_DIR "${sparsehash_INCLUDE_DIR}" DIRECT
 
 add_library(sparsehash INTERFACE IMPORTED)
 set_target_properties(sparsehash PROPERTIES
-	INTERFACE_INCLUDE_DIRECTORIES ${sparsehash_INCLUDE_DIR})
+	INTERFACE_INCLUDE_DIRECTORIES "${sparsehash_INCLUDE_DIR}/include")

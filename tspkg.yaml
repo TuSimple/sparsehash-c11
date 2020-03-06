@@ -1,6 +1,6 @@
 name: sparsehash-c11
-version: 20180608
+version: 20200108
 
 build: |
-  install sparsehash ./
+  install sparsehash include/
   install sparsehash-config.cmake share/cmake/sparsehash/
