@@ -123,6 +123,15 @@ class ValueSerializer {
   bool operator()(INPUT* fp, const std::pair<const First, Second>& value) {
     return (*this)(fp, value.first) && (*this)(fp, value.second);
   }
+  template <typename OUTPUT, typename First, typename Second>
+  bool operator()(OUTPUT* fp, std::pair<First, Second>* value) {
+    return (*this)(fp, &value->first) &&
+           (*this)(fp, &value->second);
+  }
+  template <typename INPUT, typename First, typename Second>
+  bool operator()(INPUT* fp, const std::pair<First, Second>& value) {
+    return (*this)(fp, value.first) && (*this)(fp, value.second);
+  }
 };
 
 // ------------------------------------------------------------------------
@@ -179,16 +188,16 @@ TYPED_TEST(HashtableIntTest, Typedefs) {
   // the int tables.  This is just a compile-time "test"; nothing here
   // can fail at runtime.
   this->ht_.set_deleted_key(-2);  // just so deleted_key succeeds
-  typename TypeParam::key_type kt;
-  typename TypeParam::value_type vt;
+  typename TypeParam::key_type kt;               (void)kt;
+  typename TypeParam::value_type vt;             (void)vt;  // value_type may not be copyable.  Easiest not to try.
   typename TypeParam::hasher h;
   typename TypeParam::key_equal ke;
   typename TypeParam::allocator_type at;
 
-  typename TypeParam::size_type st;
-  typename TypeParam::difference_type dt;
-  typename TypeParam::pointer p;
-  typename TypeParam::const_pointer cp;
+  typename TypeParam::size_type st;              (void)st;
+  typename TypeParam::difference_type dt;        (void)dt;
+  typename TypeParam::pointer p;                 (void)p;
+  typename TypeParam::const_pointer cp;          (void)cp;
 
   typename TypeParam::iterator i;
   typename TypeParam::const_iterator ci;
@@ -203,14 +212,10 @@ TYPED_TEST(HashtableIntTest, Typedefs) {
   // the type isn't used at all, and there's no good way to use the
   // variable.
   kt = this->ht_.deleted_key();
-  (void)vt;  // value_type may not be copyable.  Easiest not to try.
   h = this->ht_.hash_funct();
   ke = this->ht_.key_eq();
   at = this->ht_.get_allocator();
   st = this->ht_.size();
-  (void)dt;
-  (void)p;
-  (void)cp;
   i = this->ht_.begin();
   ci = this->ht_.begin();
   li = this->ht_.begin(0);
@@ -323,7 +328,7 @@ TYPED_TEST(HashtableIntTest, Constructors) {
   // The key/value types don't matter here, so I just test on one set
   // of tables, the ones with int keys, which can easily handle the
   // placement-news we have to do below.
-  Hasher hasher(1);  // 1 is a unique id
+  typename TypeParam::hasher hasher(1);  // 1 is a unique id
   int alloc_count = 0;
   Alloc<typename TypeParam::key_type> alloc(2, &alloc_count);
 
@@ -452,7 +457,7 @@ TYPED_TEST(HashtableAllTest, ClearNoResize) {
 
 TYPED_TEST(HashtableAllTest, Swap) {
   // Let's make a second hashtable with its own hasher, key_equal, etc.
-  Hasher hasher(1);  // 1 is a unique id
+  typename TypeParam::hasher hasher(1);  // 1 is a unique id
   TypeParam other_ht(200, hasher, hasher);
 
   this->ht_.set_deleted_key(this->UniqueKey(1));
@@ -756,6 +761,89 @@ TYPED_TEST(HashtableAllTest, FindAndCountAndEqualRange) {
   EXPECT_TRUE(const_eq_pair.first == const_eq_pair.second);
 }
 
+TYPED_TEST(HashtableHeterogeneousLookupTest, HeterogeneousFindAndCountAndEqualRange) {
+  pair<typename TypeParam::iterator, typename TypeParam::iterator> eq_pair;
+  pair<typename TypeParam::const_iterator, typename TypeParam::const_iterator>
+      const_eq_pair;
+
+  EXPECT_TRUE(this->ht_.empty());
+  EXPECT_TRUE(this->ht_.find(this->UniqueLookupKey(1)) == this->ht_.end());
+  EXPECT_EQ(0u, this->ht_.count(this->UniqueLookupKey(1)));
+  eq_pair = this->ht_.equal_range(this->UniqueLookupKey(1));
+  EXPECT_TRUE(eq_pair.first == eq_pair.second);
+
+  this->ht_.insert(this->UniqueObject(1));
+  EXPECT_FALSE(this->ht_.empty());
+  this->ht_.insert(this->UniqueObject(11));
+  this->ht_.insert(this->UniqueObject(111));
+  this->ht_.insert(this->UniqueObject(1111));
+  this->ht_.insert(this->UniqueObject(11111));
+  this->ht_.insert(this->UniqueObject(111111));
+  this->ht_.insert(this->UniqueObject(1111111));
+  this->ht_.insert(this->UniqueObject(11111111));
+  this->ht_.insert(this->UniqueObject(111111111));
+  EXPECT_EQ(9u, this->ht_.size());
+  typename TypeParam::const_iterator it = this->ht_.find(this->UniqueLookupKey(1));
+  EXPECT_EQ(it.key(), this->UniqueKey(1));
+
+  // Allow testing the const version of the methods as well.
+  const TypeParam ht = this->ht_;
+
+  // Some successful lookups (via find, count, and equal_range).
+  EXPECT_TRUE(this->ht_.find(this->UniqueLookupKey(1)) != this->ht_.end());
+  EXPECT_EQ(1u, this->ht_.count(this->UniqueLookupKey(1)));
+  eq_pair = this->ht_.equal_range(this->UniqueLookupKey(1));
+  EXPECT_TRUE(eq_pair.first != eq_pair.second);
+  EXPECT_EQ(eq_pair.first.key(), this->UniqueKey(1));
+  ++eq_pair.first;
+  EXPECT_TRUE(eq_pair.first == eq_pair.second);
+
+  EXPECT_TRUE(ht.find(this->UniqueLookupKey(1)) != ht.end());
+  EXPECT_EQ(1u, ht.count(this->UniqueLookupKey(1)));
+  const_eq_pair = ht.equal_range(this->UniqueLookupKey(1));
+  EXPECT_TRUE(const_eq_pair.first != const_eq_pair.second);
+  EXPECT_EQ(const_eq_pair.first.key(), this->UniqueKey(1));
+  ++const_eq_pair.first;
+  EXPECT_TRUE(const_eq_pair.first == const_eq_pair.second);
+
+  EXPECT_TRUE(this->ht_.find(this->UniqueLookupKey(11111)) != this->ht_.end());
+  EXPECT_EQ(1u, this->ht_.count(this->UniqueLookupKey(11111)));
+  eq_pair = this->ht_.equal_range(this->UniqueLookupKey(11111));
+  EXPECT_TRUE(eq_pair.first != eq_pair.second);
+  EXPECT_EQ(eq_pair.first.key(), this->UniqueKey(11111));
+  ++eq_pair.first;
+  EXPECT_TRUE(eq_pair.first == eq_pair.second);
+
+  EXPECT_TRUE(ht.find(this->UniqueLookupKey(11111)) != ht.end());
+  EXPECT_EQ(1u, ht.count(this->UniqueLookupKey(11111)));
+  const_eq_pair = ht.equal_range(this->UniqueLookupKey(11111));
+  EXPECT_TRUE(const_eq_pair.first != const_eq_pair.second);
+  EXPECT_EQ(const_eq_pair.first.key(), this->UniqueKey(11111));
+  ++const_eq_pair.first;
+  EXPECT_TRUE(const_eq_pair.first == const_eq_pair.second);
+
+  // Some unsuccessful lookups (via find, count, and equal_range).
+  EXPECT_TRUE(this->ht_.find(this->UniqueLookupKey(11112)) == this->ht_.end());
+  EXPECT_EQ(0u, this->ht_.count(this->UniqueLookupKey(11112)));
+  eq_pair = this->ht_.equal_range(this->UniqueLookupKey(11112));
+  EXPECT_TRUE(eq_pair.first == eq_pair.second);
+
+  EXPECT_TRUE(ht.find(this->UniqueLookupKey(11112)) == ht.end());
+  EXPECT_EQ(0u, ht.count(this->UniqueLookupKey(11112)));
+  const_eq_pair = ht.equal_range(this->UniqueLookupKey(11112));
+  EXPECT_TRUE(const_eq_pair.first == const_eq_pair.second);
+
+  EXPECT_TRUE(this->ht_.find(this->UniqueLookupKey(11110)) == this->ht_.end());
+  EXPECT_EQ(0u, this->ht_.count(this->UniqueLookupKey(11110)));
+  eq_pair = this->ht_.equal_range(this->UniqueLookupKey(11110));
+  EXPECT_TRUE(eq_pair.first == eq_pair.second);
+
+  EXPECT_TRUE(ht.find(this->UniqueLookupKey(11110)) == ht.end());
+  EXPECT_EQ(0u, ht.count(this->UniqueLookupKey(11110)));
+  const_eq_pair = ht.equal_range(this->UniqueLookupKey(11110));
+  EXPECT_TRUE(const_eq_pair.first == const_eq_pair.second);
+}
+
 TYPED_TEST(HashtableAllTest, BracketInsert) {
   // tests operator[], for those types that support it.
   if (!this->ht_.supports_brackets()) return;
@@ -989,7 +1077,7 @@ TYPED_TEST(HashtableAllTest, Equals) {
   EXPECT_TRUE(ht1 == ht2);
 
   // The choice of allocator/etc doesn't matter either.
-  Hasher hasher(1);
+  typename TypeParam::hasher hasher(1);
   Alloc<typename TypeParam::key_type> alloc(2, NULL);
   TypeParam ht3(5, hasher, hasher, alloc);
   EXPECT_TRUE(ht1 == ht3);
@@ -1451,7 +1539,7 @@ TEST(HashtableTest, ResizeWithoutShrink) {
       ht.erase(key);
       ht.erase(key + (j < max_entries / 2));
     }
-    EXPECT_LT(ht.bucket_count(), 4096);
+    EXPECT_LT(ht.bucket_count(), 4096ul);
   }
 }
 
